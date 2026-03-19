@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scoreboard Volley</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            background: #0a0e27;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #fff;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            color: #00d4ff;
+        }
+
+        .scoreboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .team {
+            background: linear-gradient(135deg, #1a1f3a 0%, #16213e 100%);
+            border: 3px solid #00d4ff;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .team.team-a {
+            border-color: #ff0055;
+        }
+
+        .team.team-b {
+            border-color: #00ff88;
+        }
+
+        .team-name {
+            color: #aaa;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .team-a .team-name {
+            color: #ff0055;
+        }
+
+        .team-b .team-name {
+            color: #00ff88;
+        }
+
+        .score-display {
+            font-size: 5em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            margin: 20px 0;
+            text-shadow: 0 0 20px currentColor;
+            letter-spacing: 5px;
+            color: #fff;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+
+        .team-a .score-display {
+            color: #ff0055;
+            text-shadow: 0 0 20px #ff0055;
+        }
+
+        .team-b .score-display {
+            color: #00ff88;
+            text-shadow: 0 0 20px #00ff88;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-increment {
+            background: #00ff88;
+            color: #000;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .btn-increment:hover {
+            background: #00ff99;
+            transform: scale(1.05);
+        }
+
+        .btn-increment:active {
+            transform: scale(0.95);
+        }
+
+        .btn-decrement {
+            background: #ff6b6b;
+            color: #fff;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .btn-decrement:hover {
+            background: #ff8787;
+            transform: scale(1.05);
+        }
+
+        .btn-decrement:active {
+            transform: scale(0.95);
+        }
+
+        .btn-reset {
+            background: #ff0055;
+            color: #fff;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .team-b .btn-reset {
+            background: #00d4ff;
+        }
+
+        .btn-reset:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-reset:active {
+            transform: scale(0.95);
+        }
+
+        .global-controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-global {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            background: linear-gradient(135deg, #ff0055 0%, #ff6b6b 100%);
+            color: white;
+            border: 2px solid #ff0055;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .btn-global:hover {
+            background: linear-gradient(135deg, #ff2266 0%, #ff7777 100%);
+            transform: scale(1.05);
+        }
+
+        .btn-reset-all {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+            border-color: #ffd700;
+        }
+
+        .btn-reset-all:hover {
+            background: linear-gradient(135deg, #ffdd11 0%, #ffff55 100%);
+        }
+
+        .info {
+            color: #aaa;
+            text-align: center;
+            font-size: 0.9em;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .score-display {
+                font-size: 3.5em;
+                min-height: 90px;
+            }
+
+            button {
+                padding: 10px 15px;
+                font-size: 0.95em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.5em;
+            }
+
+            .scoreboard {
+                gap: 10px;
+            }
+
+            .team {
+                padding: 15px;
+            }
+
+            .score-display {
+                font-size: 2.5em;
+                min-height: 70px;
+                letter-spacing: 3px;
+            }
+
+            button {
+                padding: 10px 12px;
+                font-size: 0.85em;
+            }
+
+            .team-name {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ SCOREBOARD VOLLEY ⚡</h1>
+            <p style="color: #888; margin-top: 10px;">Rally Scoring (0-25 Poin)</p>
+        </div>
+
+        <div class="scoreboard">
+            <!-- TEAM A -->
+            <div class="team team-a">
+                <div class="team-name">Tim A</div>
+                <div class="score-display" id="scoreA">0</div>
+                <div class="controls">
+                    <button class="btn-increment" onclick="addPointA()">+</button>
+                    <button class="btn-decrement" onclick="removePointA()">−</button>
+                </div>
+                <button class="btn-reset" onclick="resetA()">Reset Tim A</button>
+            </div>
+
+            <!-- TEAM B -->
+            <div class="team team-b">
+                <div class="team-name">Tim B</div>
+                <div class="score-display" id="scoreB">0</div>
+                <div class="controls">
+                    <button class="btn-increment" onclick="addPointB()">+</button>
+                    <button class="btn-decrement" onclick="removePointB()">−</button>
+                </div>
+                <button class="btn-reset" onclick="resetB()">Reset Tim B</button>
+            </div>
+        </div>
+
+        <div class="global-controls">
+            <button class="btn-global btn-reset-all" onclick="resetAll()">🔄 Reset Semua</button>
+        </div>
+
+        <div class="info">
+            💡 Gunakan tombol + untuk menambah poin, − untuk mengurangi poin. Maksimal 25 poin per set.
+        </div>
+    </div>
+
+    <script>
+        let scoreA = 0;
+        let scoreB = 0;
+        const MAX_SCORE = 25;
+
+        function updateDisplay() {
+            document.getElementById('scoreA').textContent = scoreA;
+            document.getElementById('scoreB').textContent = scoreB;
+            
+            // Highlight jika sudah 25 poin
+            if (scoreA >= MAX_SCORE) {
+                document.getElementById('scoreA').style.color = '#ffff00';
+                document.getElementById('scoreA').style.textShadow = '0 0 30px #ffff00';
+            } else {
+                document.getElementById('scoreA').style.color = '#ff0055';
+                document.getElementById('scoreA').style.textShadow = '0 0 20px #ff0055';
+            }
+
+            if (scoreB >= MAX_SCORE) {
+                document.getElementById('scoreB').style.color = '#ffff00';
+                document.getElementById('scoreB').style.textShadow = '0 0 30px #ffff00';
+            } else {
+                document.getElementById('scoreB').style.color = '#00ff88';
+                document.getElementById('scoreB').style.textShadow = '0 0 20px #00ff88';
+            }
+        }
+
+        function addPointA() {
+            if (scoreA < MAX_SCORE) {
+                scoreA++;
+                updateDisplay();
+            }
+        }
+
+        function removePointA() {
+            if (scoreA > 0) {
+                scoreA--;
+                updateDisplay();
+            }
+        }
+
+        function addPointB() {
+            if (scoreB < MAX_SCORE) {
+                scoreB++;
+                updateDisplay();
+            }
+        }
+
+        function removePointB() {
+            if (scoreB > 0) {
+                scoreB--;
+                updateDisplay();
+            }
+        }
+
+        function resetA() {
+            scoreA = 0;
+            updateDisplay();
+        }
+
+        function resetB() {
+            scoreB = 0;
+            updateDisplay();
+        }
+
+        function resetAll() {
+            scoreA = 0;
+            scoreB = 0;
+            updateDisplay();
+        }
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'A') addPointA();
+            if (e.key === 's' || e.key === 'S') removePointA();
+            if (e.key === 'l' || e.key === 'L') addPointB();
+            if (e.key === 'k' || e.key === 'K') removePointB();
+            if (e.key === 'r' || e.key === 'R') resetAll();
+        });
+
+        // Initial display
+        updateDisplay();
+    </script>
+</body>
+</html>
