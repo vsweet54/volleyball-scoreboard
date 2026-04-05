@@ -54,6 +54,39 @@ local function loadFishCount()
     return 0
 end
 
+local ROD_DEFAULTS = {
+    ["Basic Rod"]          = { throwToBite = 15.0, reelDur = 8.0  },
+    ["Coconut Rod"]        = { throwToBite = 11.5, reelDur = 8.0  },
+    ["Gopay Rod"]          = { throwToBite = 11.5, reelDur = 8.0  },
+    ["Party Rod"]          = { throwToBite = 11.5, reelDur = 7.1  },
+    ["Shark Rod"]          = { throwToBite = 9.4,  reelDur = 6.4  },
+    ["Vip Rod"]            = { throwToBite = 7.9,  reelDur = 4.9  },
+    ["Piranha Rod"]        = { throwToBite = 7.9,  reelDur = 5.8  },
+    ["Thermo Rod"]         = { throwToBite = 6.8,  reelDur = 5.3  },
+    ["Flowers Rod"]        = { throwToBite = 6.0,  reelDur = 4.9  },
+    ["Trisula Rod"]        = { throwToBite = 5.4,  reelDur = 4.5  },
+    ["Feather Rod"]        = { throwToBite = 4.8,  reelDur = 4.2  },
+    ["Wave Rod"]           = { throwToBite = 4.4,  reelDur = 4.0  },
+    ["Duck Rod"]           = { throwToBite = 4.1,  reelDur = 3.7  },
+    ["Planet Rod"]         = { throwToBite = 3.9,  reelDur = 3.6  },
+    ["Earth Rod"]          = { throwToBite = 3.75, reelDur = 3.5  },
+    ["Bat Rod"]            = { throwToBite = 3.5,  reelDur = 3.3  },
+    ["Pumkin Rod"]         = { throwToBite = 4.1,  reelDur = 3.4  },
+    ["Reindeer Rod"]       = { throwToBite = 4.1,  reelDur = 3.4  },
+    ["Canny Rod"]          = { throwToBite = 4.8,  reelDur = 6.1  },
+    ["Jinggle Rod"]        = { throwToBite = 3.5,  reelDur = 3.3  },
+    ["Blue Dragon Rod"]    = { throwToBite = 3.3,  reelDur = 2.9  },
+    ["Pink Dragon Rod"]    = { throwToBite = 3.3,  reelDur = 2.9  },
+    ["Blue Devotion Rod"]  = { throwToBite = 3.5,  reelDur = 3.3  },
+    ["Pink Devotion Rod"]  = { throwToBite = 3.5,  reelDur = 3.3  },
+    ["Heart Core Rod"]     = { throwToBite = 4.1,  reelDur = 3.4  },
+    ["Lunar Serpent Rod"]  = { throwToBite = 3.5,  reelDur = 3.3  },
+    ["Infernal Dragon Rod"]= { throwToBite = 4.1,  reelDur = 3.4  },
+    ["Zenith Rod"]         = { throwToBite = 3.5,  reelDur = 3.3  },
+    ["Celestia Rod"]       = { throwToBite = 4.1,  reelDur = 3.4  },
+}
+local DEFAULT_FALLBACK = { throwToBite = 15.0, reelDur = 8.0 }
+
 local rodList = {
     "Basic Rod", "Coconut Rod", "Gopay Rod", "Vip Rod", "Party Rod", "Shark Rod",
     "Piranha Rod", "Thermo Rod", "Flowers Rod", "Trisula Rod", "Feather Rod",
@@ -70,18 +103,24 @@ local fishCount      = loadFishCount()
 local loopTask       = nil
 local throwTime      = nil
 local selectedRod    = "Basic Rod"
+local throwDelay     = 1.2
 
 local autoEquip = true
 local autoThrow = true
 local autoReel  = true
 
-local biteEvent = Instance.new("BindableEvent")
-
-local history = { throwToBite = {}, reelDur = {}, samples = 0 }
+local history = {}
 local saved = loadCalibration()
 if saved and saved.history then
-    for k,v in pairs(saved.history) do history[k] = v end
-    notify("AutoFish", string.format("Loaded! samples=%d", history.samples), 5)
+    history = saved.history
+    notify("AutoFish", "Calibration loaded!", 5)
+end
+
+local function getHistory(rod)
+    if not history[rod] then
+        history[rod] = { throwToBite = {}, reelDur = {}, samples = 0 }
+    end
+    return history[rod]
 end
 
 local MAX_SAMPLES = 8
@@ -89,10 +128,11 @@ local function avg(t)
     if not t or #t == 0 then return nil end
     local s = 0; for _,v in ipairs(t) do s += v end; return s/#t
 end
-local function pushHistory(key, val)
-    if not history[key] then history[key] = {} end
-    table.insert(history[key], val)
-    if #history[key] > MAX_SAMPLES then table.remove(history[key], 1) end
+local function pushHistory(rod, key, val)
+    local h = getHistory(rod)
+    if not h[key] then h[key] = {} end
+    table.insert(h[key], val)
+    if #h[key] > MAX_SAMPLES then table.remove(h[key], 1) end
 end
 
 local function getBarParts()
@@ -101,114 +141,12 @@ local function getBarParts()
     local frame    = r:FindFirstChild("Frame")
     local barFrame = frame and frame:FindFirstChild("Frame")
     if not barFrame then return nil end
-    local whiteBar    = barFrame:FindFirstChild("WhiteBar")
-    local redBar      = barFrame:FindFirstChild("RedBar")
-    local progressBg  = frame:FindFirstChild("ProgressBg")
-    local progressBar = progressBg and progressBg:FindFirstChild("ProgressBar")
+    local whiteBar = barFrame:FindFirstChild("WhiteBar")
+    local redBar   = barFrame:FindFirstChild("RedBar")
     if not whiteBar or not redBar then return nil end
-    return whiteBar, redBar, progressBg, progressBar
-end
-local function getProgress()
-    local _,_,progressBg,progressBar = getBarParts()
-    if not progressBg or not progressBar then return 0 end
-    local bgW = progressBg.AbsoluteSize.X
-    if bgW <= 0 then return 0 end
-    return math.clamp(progressBar.AbsoluteSize.X / bgW, 0, 1)
+    return whiteBar, redBar
 end
 
-local function solveMinigame(reelStartTime)
-    local waitTime = 0
-    while waitTime < 3 do
-        local w,r = getBarParts()
-        if w and r then break end
-        task.wait(0.05); waitTime += 0.05
-    end
-    task.wait(0.1)
-
-    local whiteBar, redBar = getBarParts()
-    if not whiteBar or not redBar then return end
-
-    local snapConn
-    snapConn = RunService.RenderStepped:Connect(function()
-        if not minigameActive or not autoReel then snapConn:Disconnect(); return end
-        whiteBar, redBar = getBarParts()
-        if not whiteBar or not redBar then snapConn:Disconnect(); return end
-        if getProgress() >= 0.98 then snapConn:Disconnect(); return end
-        pcall(function()
-            whiteBar.Size     = UDim2.new(1, 0, whiteBar.Size.Y.Scale, whiteBar.Size.Y.Offset)
-            whiteBar.Position = UDim2.new(0, 0, whiteBar.Position.Y.Scale, whiteBar.Position.Y.Offset)
-        end)
-    end)
-
-    local timeout, elapsed = 30, 0
-    while minigameActive and elapsed < timeout do
-        task.wait(0.5); elapsed += 0.5
-        if getProgress() >= 0.98 then break end
-    end
-
-    snapConn:Disconnect()
-    minigameActive = false
-    local reelDur = tick() - reelStartTime
-    pushHistory("reelDur", reelDur)
-    history.samples += 1
-    saveCalibration(history)
-end
-
-local function setupReelingWatch(Reeling)
-    Reeling:GetPropertyChangedSignal("Enabled"):Connect(function()
-        if Reeling.Enabled then
-            if not running then return end
-            local t = tick()
-            if throwTime then
-                pushHistory("throwToBite", t - throwTime)
-                throwTime = nil
-            end
-            biteEvent:Fire()
-            if not minigameActive and autoReel then
-                minigameActive = true
-                task.spawn(function() solveMinigame(t); minigameActive = false end)
-            end
-        else
-            minigameActive = false
-        end
-    end)
-    if Reeling.Enabled and running and not minigameActive and autoReel then
-        biteEvent:Fire()
-        minigameActive = true
-        task.spawn(function() solveMinigame(tick()); minigameActive = false end)
-    end
-end
-
-local function watchMinigame()
-    local pg = LocalPlayer:WaitForChild("PlayerGui")
-    local ex = pg:FindFirstChild("Reeling")
-    if ex then setupReelingWatch(ex) end
-    pg.ChildAdded:Connect(function(c)
-        if c.Name == "Reeling" then setupReelingWatch(c) end
-    end)
-end
-
-local function isAlreadyCasting()
-    if minigameActive or isThrowing then return true end
-    local r = LocalPlayer.PlayerGui:FindFirstChild("Reeling")
-    return r and r.Enabled or false
-end
-
-local function getRod()
-    local char = LocalPlayer.Character
-    local bp   = LocalPlayer:FindFirstChild("Backpack")
-    if char then
-        local r = char:FindFirstChild(selectedRod)
-        if r then return r end
-    end
-    if bp then
-        local r = bp:FindFirstChild(selectedRod)
-        if r then return r end
-    end
-end
-
--- forced = true: bypass autoEquip check (manual click dari UI)
--- forced = false/nil: ikut setting autoEquip
 local function equip(forced)
     if not forced and not autoEquip then return end
     local char = LocalPlayer.Character
@@ -250,23 +188,9 @@ local function equip(forced)
     task.wait(0.3)
 end
 
-local function throwRod(rod)
-    if not autoThrow then return false end
-    if isAlreadyCasting() then return false end
-    isThrowing = true; throwTime = tick()
-    pcall(function() RodRemote:FireServer("Throw", rod, workspace:WaitForChild("Terrain")) end)
-    local check = 0
-    while check < 1 do
-        task.wait(0.1); check += 0.1
-        local r = LocalPlayer.PlayerGui:FindFirstChild("Reeling")
-        if r and r.Enabled then isThrowing = false; return true end
-    end
-    isThrowing = false; return true
-end
-
 local function catchFish(rod)
     pcall(function() RodRemote:FireServer("Catch", rod, false) end)
-    task.wait(0.3)
+    task.wait(0.2)
 end
 
 local KG_CATEGORY = {[50]="All under 50 Kg",[100]="All under 100 Kg",[400]="All under 400 Kg",[600]="All under 600 Kg",[0]="Sell All"}
@@ -298,42 +222,93 @@ local function startFishing()
     loopTask = task.spawn(function()
         while running do
             pcall(function()
-                local rod = getRod()
-                if not rod and autoEquip then equip(); task.wait(0.5); rod = getRod() end
-                if not rod or isAlreadyCasting() then task.wait(0.5); return end
-
-                if autoEquip then equip() end
                 local char = LocalPlayer.Character
-                if not char or not char:FindFirstChild(selectedRod) then task.wait(0.5); return end
+                if not char then task.wait(0.5); return end
 
-                local thrown = throwRod(rod)
-                if not thrown then task.wait(0.5); return end
-
-                local biteFired = false
-                local biteConn = biteEvent.Event:Connect(function() biteFired = true end)
-                local avgBite = avg(history.throwToBite)
-                local timeout = avgBite and math.max(avgBite * 2.5, 15) or 60
-                local elapsed = 0
-                while not biteFired and elapsed < timeout and running do task.wait(0.1); elapsed += 0.1 end
-                biteConn:Disconnect()
-
-                if not biteFired then throwTime = nil; return end
-                local mg = 0
-                while minigameActive and mg < 30 do task.wait(0.1); mg += 0.1 end
-
-                local rw = 0
-                while rw < 3 do
-                    local r = LocalPlayer.PlayerGui:FindFirstChild("Reeling")
-                    if not r or not r.Enabled then break end
-                    task.wait(0.1); rw += 0.1
+                -- Equip rod kalau belum
+                if not char:FindFirstChild(selectedRod) then
+                    if autoEquip then equip(); char = LocalPlayer.Character end
+                    if not char or not char:FindFirstChild(selectedRod) then task.wait(0.5); return end
                 end
 
-                task.wait(0.2)
+                local rod = char:FindFirstChild(selectedRod)
+                if not rod then task.wait(0.3); return end
+
+                -- Kalau Reeling masih aktif, skip throw
+                local reelingNow = LocalPlayer.PlayerGui:FindFirstChild("Reeling")
+                if reelingNow and reelingNow.Enabled then task.wait(0.1); return end
+
+                -- THROW
+                if autoThrow then
+                    isThrowing = true
+                    throwTime = tick()
+                    pcall(function() RodRemote:FireServer("Throw", rod, workspace:WaitForChild("Terrain")) end)
+                end
+
+                -- Tunggu Reeling GUI muncul = bite detected
+                local def = ROD_DEFAULTS[selectedRod] or DEFAULT_FALLBACK
+                local h = getHistory(selectedRod)
+                local biteTimeout = (avg(h.throwToBite) or def.throwToBite) * 2.5
+                local elapsed = 0
+                local bitten = false
+                while elapsed < biteTimeout and running do
+                    local r = LocalPlayer.PlayerGui:FindFirstChild("Reeling")
+                    if r and r.Enabled then bitten = true; break end
+                    task.wait(0.05); elapsed += 0.05
+                end
+                isThrowing = false
+
+                if not bitten then
+                    -- timeout tanpa bite, langsung re-throw
+                    throwTime = nil; return
+                end
+
+                -- Catat throwToBite
+                if throwTime then
+                    pushHistory(selectedRod, "throwToBite", tick() - throwTime)
+                    throwTime = nil
+                end
+
+                -- REEL: snap whitebar sampai Reeling GUI hilang
+                if autoReel then
+                    minigameActive = true
+                    local reelStart = tick()
+                    local snapConn
+                    snapConn = RunService.RenderStepped:Connect(function()
+                        if not minigameActive then snapConn:Disconnect(); return end
+                        local wb = getBarParts()
+                        if not wb then snapConn:Disconnect(); return end
+                        pcall(function()
+                            wb.Size     = UDim2.new(1, 0, wb.Size.Y.Scale, wb.Size.Y.Offset)
+                            wb.Position = UDim2.new(0, 0, wb.Position.Y.Scale, wb.Position.Y.Offset)
+                        end)
+                    end)
+
+                    -- Poll sampai Reeling GUI hilang = reel selesai
+                    elapsed = 0
+                    while elapsed < 30 and running do
+                        task.wait(0.05); elapsed += 0.05
+                        local r = LocalPlayer.PlayerGui:FindFirstChild("Reeling")
+                        if not r or not r.Enabled then break end
+                    end
+
+                    snapConn:Disconnect()
+                    minigameActive = false
+                    pushHistory(selectedRod, "reelDur", tick() - reelStart)
+                    getHistory(selectedRod).samples = (getHistory(selectedRod).samples or 0) + 1
+                    saveCalibration(history)
+                end
+
+                -- CATCH
                 catchFish(rod)
+                task.wait(throwDelay)
+                minigameActive = false
+                isThrowing = false
+
                 fishCount += 1
                 saveFishCount(fishCount)
             end)
-            task.wait(0.3)
+            task.wait(0.05)
         end
     end)
 end
@@ -360,7 +335,7 @@ local C = {
     divider = Color3.fromRGB(32, 32, 45), minimize = Color3.fromRGB(180, 140, 0)
 }
 
-local W, H, SIDEBAR_W, TITLE_H, STATUS_H = 250, 265, 62, 28, 15
+local W, H, SIDEBAR_W, TITLE_H, STATUS_H = 250, 295, 62, 28, 15
 local BODY_Y = TITLE_H + STATUS_H + 3
 local BODY_H = H - BODY_Y
 
@@ -445,9 +420,7 @@ local MINI_W, MINI_H = 110, 28
 minimizeBtn.Activated:Connect(function()
     minimized = not minimized
     if minimized then
-        TweenService:Create(frame, TweenInfo.new(0.2), {
-            Size = UDim2.new(0, MINI_W, 0, MINI_H)
-        }):Play()
+        TweenService:Create(frame, TweenInfo.new(0.2), {Size = UDim2.new(0, MINI_W, 0, MINI_H)}):Play()
         task.wait(0.05)
         statusLabel.Visible = false
         bodyFrame.Visible = false
@@ -458,9 +431,7 @@ minimizeBtn.Activated:Connect(function()
         bodyFrame.Visible = true
         titleLabel.Text = "Neo AutoFish"
         minimizeBtn.Text = "_"
-        TweenService:Create(frame, TweenInfo.new(0.2), {
-            Size = UDim2.new(0, W, 0, H)
-        }):Play()
+        TweenService:Create(frame, TweenInfo.new(0.2), {Size = UDim2.new(0, W, 0, H)}):Play()
     end
 end)
 
@@ -482,11 +453,7 @@ contentPad.Size = UDim2.new(1, -14, 1, -12)
 contentPad.Position = UDim2.new(0, 8, 0, 7)
 contentPad.BackgroundTransparency = 1
 
-local tabDefs = {
-    { label = "FISH" },
-    { label = "SELL" },
-    { label = "ROD"  },
-}
+local tabDefs = {{ label = "FISH" }, { label = "SELL" }, { label = "ROD" }}
 local tabBtns = {}
 for i, def in ipairs(tabDefs) do
     local btn = Instance.new("TextButton", sidebar)
@@ -495,10 +462,8 @@ for i, def in ipairs(tabDefs) do
     btn.BackgroundColor3 = C.tab
     btn.Text = ""
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-
     local nameLbl = Instance.new("TextLabel", btn)
     nameLbl.Size = UDim2.new(1, 0, 1, 0)
-    nameLbl.Position = UDim2.new(0, 0, 0, 0)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Text = def.label
     nameLbl.TextSize = 10
@@ -553,6 +518,61 @@ makeSlider(pages[1], "Auto Equip", 32, autoEquip, function(v) autoEquip = v end)
 makeSlider(pages[1], "Auto Throw", 64, autoThrow, function(v) autoThrow = v end)
 makeSlider(pages[1], "Auto Reel",  96, autoReel,  function(v) autoReel  = v end)
 
+-- Throw Delay row
+local delayRow = Instance.new("Frame", pages[1])
+delayRow.Size = UDim2.new(1, 0, 0, 28)
+delayRow.Position = UDim2.new(0, 0, 0, 128)
+delayRow.BackgroundTransparency = 1
+
+local delayLbl = Instance.new("TextLabel", delayRow)
+delayLbl.Size = UDim2.new(1, -70, 1, 0)
+delayLbl.Text = "Throw Delay"
+delayLbl.TextColor3 = C.white
+delayLbl.TextSize = 11
+delayLbl.Font = Enum.Font.Gotham
+delayLbl.TextXAlignment = Enum.TextXAlignment.Left
+delayLbl.BackgroundTransparency = 1
+
+local delayVal = Instance.new("TextLabel", delayRow)
+delayVal.Size = UDim2.new(0, 30, 1, 0)
+delayVal.Position = UDim2.new(1, -70, 0, 0)
+delayVal.Text = throwDelay .. "s"
+delayVal.TextColor3 = C.sub
+delayVal.TextSize = 10
+delayVal.Font = Enum.Font.Gotham
+delayVal.BackgroundTransparency = 1
+delayVal.TextXAlignment = Enum.TextXAlignment.Center
+
+local minusBtn = Instance.new("TextButton", delayRow)
+minusBtn.Size = UDim2.new(0, 18, 0, 18)
+minusBtn.Position = UDim2.new(1, -38, 0.5, -9)
+minusBtn.BackgroundColor3 = C.sidebar
+minusBtn.Text = "-"
+minusBtn.TextColor3 = C.white
+minusBtn.TextSize = 12
+minusBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", minusBtn).CornerRadius = UDim.new(0, 4)
+
+local plusBtn = Instance.new("TextButton", delayRow)
+plusBtn.Size = UDim2.new(0, 18, 0, 18)
+plusBtn.Position = UDim2.new(1, -18, 0.5, -9)
+plusBtn.BackgroundColor3 = C.sidebar
+plusBtn.Text = "+"
+plusBtn.TextColor3 = C.white
+plusBtn.TextSize = 12
+plusBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", plusBtn).CornerRadius = UDim.new(0, 4)
+
+minusBtn.Activated:Connect(function()
+    throwDelay = math.max(0.2, math.floor((throwDelay - 0.2) * 10 + 0.5) / 10)
+    delayVal.Text = throwDelay .. "s"
+end)
+plusBtn.Activated:Connect(function()
+    throwDelay = math.min(5.0, math.floor((throwDelay + 0.2) * 10 + 0.5) / 10)
+    delayVal.Text = throwDelay .. "s"
+end)
+
+-- Sell page
 local sellData = {{"Sell All", 0}, {"Under 50 Kg", 50}, {"Under 100 Kg", 100}, {"Under 400 Kg", 400}, {"Under 600 Kg", 600}}
 for i, data in ipairs(sellData) do
     local btn = Instance.new("TextButton", pages[2])
@@ -567,6 +587,7 @@ for i, data in ipairs(sellData) do
     btn.Activated:Connect(function() task.spawn(function() sellFish(data[2]) end) end)
 end
 
+-- Rod page
 local rodScroll = Instance.new("ScrollingFrame", pages[3])
 rodScroll.Size = UDim2.new(1, 0, 1, 0)
 rodScroll.BackgroundTransparency = 1
@@ -584,19 +605,19 @@ for i, rodName in ipairs(rodList) do
     btn.Font = Enum.Font.GothamBold
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
     rodBtns[i] = btn
-btn.Activated:Connect(function()
-    selectedRod = rodName
-    for _, b in ipairs(rodBtns) do b.BackgroundColor3 = (b.Text == selectedRod and C.tabsel or C.tab) end
-    notify("Rod", selectedRod, 3)
-    if autoEquip then
-        task.spawn(function() equip(true) end) -- pegang langsung
-    else
-        -- cuma daftarin ke server/backpack, ga pegang
-        task.spawn(function()
-            pcall(function() RodShopRF:InvokeServer("EquipRod", selectedRod) end)
-        end)
-    end
-end)
+    btn.Activated:Connect(function()
+        selectedRod = rodName
+        for _, b in ipairs(rodBtns) do b.BackgroundColor3 = (b.Text == selectedRod and C.tabsel or C.tab) end
+        local def = ROD_DEFAULTS[rodName] or DEFAULT_FALLBACK
+        notify("Rod", selectedRod .. string.format(" (bite~%.1fs)", def.throwToBite), 3)
+        if autoEquip then
+            task.spawn(function() equip(true) end)
+        else
+            task.spawn(function()
+                pcall(function() RodShopRF:InvokeServer("EquipRod", selectedRod) end)
+            end)
+        end
+    end)
 end
 
 local function switchTab(idx)
@@ -610,11 +631,19 @@ end
 for i, t in ipairs(tabBtns) do t.btn.Activated:Connect(function() switchTab(i) end) end
 switchTab(1)
 
+-- Status updater
 task.spawn(function()
-    while true do task.wait(1)
-        statusLabel.Text = (running and (minigameActive and "REEL" or (isThrowing and "THROW" or "ON")) or "OFF") .. " | " .. selectedRod
+    while true do task.wait(0.1)
+        local h = getHistory(selectedRod)
+        local samples = h.samples or 0
+        local state = "OFF"
+        if running then
+            if minigameActive then state = "REEL"
+            elseif isThrowing then state = "THROW"
+            else state = "ON" end
+        end
+        statusLabel.Text = state .. " | " .. selectedRod .. " [" .. samples .. "]"
     end
 end)
 
-watchMinigame()
 notify("Neo AutoFish", "Ready!", 5)
